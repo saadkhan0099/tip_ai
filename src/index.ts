@@ -1,9 +1,16 @@
 import { Hono } from "hono";
+import voiceRoute from "./routes/voice";
+import healthRoute from "./routes/health";
 
-const app = new Hono<{ Bindings: CloudflareBindings }>();
+type Bindings = {
+  CIRCLE_API_KEY: string;
+  CIRCLE_WALLET_ID: string;
+};
 
-app.get("/message", (c) => {
-  return c.text("Hello Hono!");
-});
+const app = new Hono();
+
+app.get("/", (c) => c.text("Micropayment Agent is Up"));
+app.get("/health", healthRoute);
+app.post("/voice", voiceRoute);
 
 export default app;

@@ -1,0 +1,6 @@
+const usernameMap: Record<string, string> = {
+  "@CoolStreamer": "0x1234567890abcdef1234567890abcdef12345678",
+  "@DemoUser": "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+};
+
+export default usernameMap;
