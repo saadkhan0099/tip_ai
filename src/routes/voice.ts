@@ -2,35 +2,41 @@
 import type { Context } from "hono";
 import { parseIntent, PaymentIntent } from "../services/llmService";
 import { sendTip, PaymentResult } from "../services/paymentService";
+import { transcribeAudioFile, speakResponse } from "../services/voiceService"; // <--- IMPORT
 import type { Bindings } from "../bindings";
 
+// Find a voice ID you like from the ElevenLabs website.
+const ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Example: "Rachel"
+
 export default async (c: Context<{ Bindings: Bindings }>) => {
+  let transcription = "";
+  let intent: PaymentIntent;
+
   try {
-    const body = await c.req.json().catch(() => ({}));
-    // Get transcription from body
-    const transcription: string | undefined =
-      body && (body.transcription || body.text);
+    // 1. GET AUDIO FROM REQUEST
+    // The client must send FormData with an "audio" field
+    const body = await c.req.formData();
+    const audioFile = body.get("audio");
 
-    // If no text is provided, fail immediately.
-    if (!transcription) {
-      return c.json(
-        {
-          success: false,
-          error: "Missing transcription or text field in request body",
-        },
-        400
-      );
+    // Allow a "text" fallback for easy testing with curl
+    const textFallback = body.get("text");
+
+    if (audioFile instanceof File) {
+      // --- AUDIO PATH ---
+      // 2. TRANSCRIBE (Speech-to-Text)
+      transcription = await transcribeAudioFile(audioFile, c.env);
+    } else if (typeof textFallback === "string") {
+      // --- TEXT FALLBACK PATH ---
+      transcription = textFallback;
+    } else {
+      throw new Error("Missing 'audio' file or 'text' field in FormData");
     }
 
-    // Parse intent using the AI binding from c.env.AI
+    // 3. PARSE INTENT (LLM)
     const aiBinding = c.env.AI;
-    if (!aiBinding) {
-      // In dev you may not have AI binding; we can fallback to regex parsing in parseIntent
-    }
+    intent = await parseIntent(aiBinding, transcription);
 
-    const intent: PaymentIntent = await parseIntent(aiBinding, transcription);
-
-    // Validate the intent strictly
+    // Validate the intent
     if (
       !intent ||
       intent.action !== "send" ||
@@ -38,66 +44,57 @@ export default async (c: Context<{ Bindings: Bindings }>) => {
       intent.currency !== "USDC" ||
       !intent.recipient
     ) {
-      return c.json(
-        {
-          success: false,
-          error: "Could not understand payment intent",
-          intent,
-        },
-        400
-      );
+      // We will generate audio for this error message below
+      throw new Error("Sorry, I could not understand the payment intent.");
     }
 
-    // Call payment service. supply the whole env so service can read RECIPIENT_MAP, API keys etc.
-    const userId = body?.userId || "anonymous"; // in prod use authenticated user id
-
-    // The traceId MUST come from the client to ensure idempotency.
-    // Do NOT generate a random one here.
-    const traceId = body?.traceId || undefined;
+    // 4. EXECUTE PAYMENT
+    const userId = body.get("userId")?.toString() || "anonymous";
+    const traceId = body.get("traceId")?.toString() || undefined;
 
     const result: PaymentResult = await sendTip(
       intent.amount,
       intent.currency,
       intent.recipient,
       c.env,
-      { userId, traceId } // traceId will be undefined if client doesn't send
+      { userId, traceId }
     );
 
+    // 5. GENERATE SUCCESS RESPONSE (Text-to-Speech)
+    let message = "";
     if (result.success) {
-      return c.json({
-        success: true,
-        message: `Sent ${intent.amount} ${intent.currency} to ${intent.recipient}`,
-        txId: result.txId,
-        explorer: result.explorer,
-      });
+      message = `Sent ${intent.amount} ${intent.currency} to ${intent.recipient}`;
     } else {
-      return c.json(
-        {
-          success: false,
-          error: result.error,
-          code: result.code,
-          details: result.details ?? null,
-        },
-        500
-      );
+      // We will generate audio for this error message below
+      throw new Error(result.error || "Payment failed");
     }
+
+    const audioResponse = await speakResponse(
+      message,
+      ELEVENLABS_VOICE_ID,
+      c.env
+    );
+
+    return new Response(audioResponse, {
+      headers: { "Content-Type": "audio/mpeg" },
+    });
   } catch (err: any) {
+    // 5b. GENERATE ERROR RESPONSE (Text-to-Speech)
     console.error("Voice route error:", err);
-    return c.json({ success: false, error: err?.message ?? String(err) }, 500);
+    const errorMessage =
+      err.message === "unknown_recipient"
+        ? "Sorry, I don't know that recipient."
+        : err.message || "An unknown error occurred";
+
+    const audioResponse = await speakResponse(
+      errorMessage,
+      ELEVENLABS_VOICE_ID,
+      c.env
+    );
+
+    return new Response(audioResponse, {
+      status: 500,
+      headers: { "Content-Type": "audio/mpeg" },
+    });
   }
 };
-
-function cryptoRandomHex(len = 8) {
-  // lightweight hex id for traceId
-  if (typeof globalThis.crypto?.getRandomValues === "function") {
-    const arr = new Uint8Array(len);
-    globalThis.crypto.getRandomValues(arr);
-    return Array.from(arr)
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-  }
-  // fallback
-  return Math.random()
-    .toString(16)
-    .slice(2, 2 + len * 2);
-}

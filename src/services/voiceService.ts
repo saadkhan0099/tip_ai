@@ -4,25 +4,26 @@ import type { Bindings } from "../bindings";
 const ELEVENLABS_BASE = "https://api.elevenlabs.io";
 
 /**
- * Transcribes audio from a hosted URL using ElevenLabs STT endpoint.
- * Note: for hackathon you can skip audio hosting and just send text to the /voice route.
+ * Transcribes an audio file using ElevenLabs STT endpoint.
+ * This version accepts a File/Blob and uploads it.
  */
-export async function transcribeVoice(
-  fileUrl: string,
+export async function transcribeAudioFile(
+  audioFile: File | Blob,
   env: Bindings
 ): Promise<string> {
   if (!env.ELEVENLABS_API_KEY) throw new Error("Missing ElevenLabs API key");
-  const resp = await fetch(`${ELEVENLABS_BASE}/v1/speech-to-text/convert`, {
+
+  const formData = new FormData();
+  formData.append("file", audioFile, "audio.webm"); // The filename doesn't matter much
+  formData.append("model_id", "eleven_multilingual_v2");
+
+  const resp = await fetch(`${ELEVENLABS_BASE}/v1/speech-to-text`, {
     method: "POST",
     headers: {
       "xi-api-key": env.ELEVENLABS_API_KEY,
-      "Content-Type": "application/json",
+      // "Content-Type" is set automatically by fetch when using FormData
     },
-    body: JSON.stringify({
-      model_id: "scribe_v1",
-      cloud_storage_url: fileUrl,
-      language_code: "eng",
-    }),
+    body: formData,
   });
 
   if (!resp.ok) {
