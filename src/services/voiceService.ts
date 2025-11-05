@@ -1,13 +1,17 @@
-type Env = {
-  ELEVENLABS_API_KEY: string;
-};
+// src/services/voiceService.ts
+import type { Bindings } from "../bindings";
 
 const ELEVENLABS_BASE = "https://api.elevenlabs.io";
 
+/**
+ * Transcribes audio from a hosted URL using ElevenLabs STT endpoint.
+ * Note: for hackathon you can skip audio hosting and just send text to the /voice route.
+ */
 export async function transcribeVoice(
   fileUrl: string,
-  env: Env
+  env: Bindings
 ): Promise<string> {
+  if (!env.ELEVENLABS_API_KEY) throw new Error("Missing ElevenLabs API key");
   const resp = await fetch(`${ELEVENLABS_BASE}/v1/speech-to-text/convert`, {
     method: "POST",
     headers: {
@@ -25,16 +29,19 @@ export async function transcribeVoice(
     const text = await resp.text();
     throw new Error(`ElevenLabs STT error: ${resp.status} – ${text}`);
   }
-
   const j = await resp.json();
   return j.text as string;
 }
 
+/**
+ * Text to speech (returns ArrayBuffer of audio)
+ */
 export async function speakResponse(
   text: string,
   voiceId: string,
-  env: Env
+  env: Bindings
 ): Promise<ArrayBuffer> {
+  if (!env.ELEVENLABS_API_KEY) throw new Error("Missing ElevenLabs API key");
   const resp = await fetch(`${ELEVENLABS_BASE}/v1/text-to-speech/${voiceId}`, {
     method: "POST",
     headers: {

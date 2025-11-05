@@ -2,16 +2,20 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "hackathon",
   "main": "src/index.ts",
-  "type": "module",
   "compatibility_date": "2025-11-01",
-  "vars": {
-    "NON_SENSITIVE_CONFIG": "value"
-  },
+  "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "binding": "ASSETS",
     "directory": "./public"
   },
   "observability": {
     "enabled": true
+  },
+  "ai": {
+    "binding": "AI"
+  },
+  "vars": {
+    "NON_SENSITIVE_CONFIG": "value",
+    "RECIPIENT_MAP": "{\n  \"@coolstreamer\": \"0x...YOUR_RECIPIENT_ARC_ADDRESS_1\",\n  \"@demouser\": \"0x...YOUR_RECIPIENT_ARC_ADDRESS_2\",\n  \"default_recipient\": \"0x...YOUR_DEFAULT_TEST_ADDRESS\"\n}"
   }
 }

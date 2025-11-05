@@ -1,15 +1,13 @@
+// src/index.ts
 import { Hono } from "hono";
 import voiceRoute from "./routes/voice";
 import healthRoute from "./routes/health";
+import type { Bindings } from "./bindings";
 
-type Bindings = {
-  CIRCLE_API_KEY: string;
-  CIRCLE_WALLET_ID: string;
-};
+const app = new Hono<{ Bindings: Bindings }>();
 
-const app = new Hono();
-
-app.get("/", (c) => c.text("Micropayment Agent is Up"));
+app.get("/", (c) => c.text("Voice Micropayment Agent is running."));
+// route handlers accept Context and return Response-like
 app.get("/health", healthRoute);
 app.post("/voice", voiceRoute);
 
